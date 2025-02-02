@@ -1,10 +1,12 @@
 package main
 
 import (
+	"go-streamer/internal/handlers"
 	"go-streamer/internal/repositorioes"
 	"go-streamer/internal/utils"
 	"log"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -19,6 +21,10 @@ func main() {
 
 	r := gin.Default()
 
+	corsConf := cors.DefaultConfig()
+	corsConf.AllowAllOrigins = true
+
+	r.Use(cors.New(corsConf))
 	r.Use(func(c *gin.Context) {
 		c.Set(utils.S3_REPO_CTX_KEY, s3Repo)
 		c.Next()
@@ -29,6 +35,7 @@ func main() {
 		repo.TestListObject()
 		c.JSON(200, gin.H{"message": "pong"})
 	})
+	r.GET("/video/:fileId", handlers.ServeVideo)
 
 	r.Run()
 }
