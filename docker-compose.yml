@@ -1,0 +1,22 @@
+services:
+    gogovid:
+        network_mode: host
+        build:
+            context: .
+            dockerfile: Dockerfile.service
+        ports:
+            - "8080:8080"
+        container_name: gogovid-container
+        volumes:
+            - .:/app
+        command: sh -c "make build && ./bin/gogovid"
+    minio:
+        build:
+            context: .
+            dockerfile: Dockerfile.minio
+        ports:
+            - "9000:9000"
+            - "9001:9001"
+        container_name: minio-stream
+        volumes:
+            - ./data:/data

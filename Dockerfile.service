@@ -1,0 +1,44 @@
+# Use an official Go runtime as the base image
+FROM golang:1.23.5-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git gcc musl-dev
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the Go module files
+COPY go.mod go.sum ./
+
+# Download Go dependencies
+RUN go mod download
+
+# Copy the rest of the application code
+COPY . .
+
+
+# Use a lightweight Alpine image for the final stage
+# FROM alpine:latest
+
+# Install FFmpeg, Shaka Packager, and required codecs
+RUN apk upgrade -U
+RUN apk add --no-cache \
+    ffmpeg \
+    wget \
+    libstdc++ \
+    make
+
+RUN wget https://github.com/shaka-project/shaka-packager/releases/download/v2.6.1/packager-linux-x64 -O /usr/local/bin/packager \
+    && chmod +x /usr/local/bin/packager
+
+# Build the Go application
+RUN make build
+
+# Copy the Go binary from the builder stage
+COPY bin/gogovid /usr/local/bin/gogovid
+
+# Expose the port your Go server will run on
+EXPOSE 8080
+
+# Run the Go server
+CMD ./bin/gogovid

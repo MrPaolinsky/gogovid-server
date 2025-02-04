@@ -1,6 +1,6 @@
 GOIMP = "gofmt"
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v vendor)
-BINARY_NAME=go-streamer
+BINARY_NAME=gogovid
 OUTPUT_DIR=bin
 
 build: create-build-dir
