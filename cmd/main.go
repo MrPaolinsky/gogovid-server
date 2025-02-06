@@ -37,5 +37,7 @@ func main() {
 	})
 	r.GET("/video/:fileId", handlers.ServeVideo)
 
+	r.POST("/video", handlers.UploadVideo)
+
 	r.Run()
 }

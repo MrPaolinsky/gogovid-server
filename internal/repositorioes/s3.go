@@ -50,7 +50,7 @@ func (r *S3Repo) TestListObject() {
 }
 
 func (r *S3Repo) GetObjectByFileName(path string) (*s3.GetObjectOutput, error) {
-	objectKey := "tEST/" + path
+	objectKey := "t/" + path
 	result, err := r.client.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(os.Getenv("S3_BUCKET")),
 		Key:    aws.String(objectKey),
@@ -68,4 +68,9 @@ func (r *S3Repo) GetObjectByFileName(path string) (*s3.GetObjectOutput, error) {
 	}
 
 	return result, nil
+}
+
+func (r *S3Repo) UploadFromPath(path string) error {
+
+	return nil
 }

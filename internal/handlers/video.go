@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"go-streamer/internal/repositorioes"
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func ServeVideo(c *gin.Context) {
 
 	var contentHeader string
 
-	if fileIsMPD(file) {
+	if utils.FileIsMPD(file) {
 		contentHeader = "application/dash+xml"
 	} else {
 		contentHeader = "video/mp4"
@@ -41,6 +41,27 @@ func ServeVideo(c *gin.Context) {
 	)
 }
 
-func fileIsMPD(fileName string) bool {
-	return strings.HasSuffix(fileName, ".mpd")
+func UploadVideo(c *gin.Context) {
+	file, err := c.FormFile("video")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file found in request"})
+		return
+	}
+
+	tempFilePath := fmt.Sprintf("/tmp/%s", file.Filename)
+	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, func(path string) {
+		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
+		repo.UploadFromPath(path)
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		log.Println(err)
+	}
+
 }
