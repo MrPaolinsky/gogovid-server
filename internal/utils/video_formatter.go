@@ -63,7 +63,7 @@ func ConvertAndFormatToFragmentedMP4(videoPath string, fn FormattingCallback) er
 		return err
 	}
 
-	err = generateFragmentedMP4(actionPath, name)
+	err = generateFragmentedMP4(videoPath, actionPath, name)
 
 	if err != nil {
 		log.Println("Error generatiing fragmented mp4")
@@ -97,7 +97,7 @@ func generateVideoResolutionsForPackager(filePath string, actionPath string, nam
 	return nil
 }
 
-func generateFragmentedMP4(actionPath string, name string) error {
+func generateFragmentedMP4(filePath string, actionPath string, name string) error {
 	fragmentQualityCommands := []string{}
 
 	for i := 0; i < len(qualities); i++ {
@@ -114,6 +114,7 @@ func generateFragmentedMP4(actionPath string, name string) error {
 
 	fragmentQualityCommands = append(
 		fragmentQualityCommands,
+		fmt.Sprintf("input=%s,stream=audio,segment_template=audio_$Number$.m4s,init_segment=audio_init.m4s", filePath),
 		"--generate_static_live_mpd",
 		"--mpd_output", fmt.Sprintf("%s.mpd", name),
 		"--fragment_duration", "8",

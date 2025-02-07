@@ -56,7 +56,13 @@ func UploadVideo(c *gin.Context) {
 
 	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, func(path string) {
 		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
-		repo.UploadFromPath(path)
+		err := repo.UploadFragmentedVideoFromPath(path, file.Filename)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload files"})
+			log.Println(err)
+			return
+		}
 	})
 
 	if err != nil {
