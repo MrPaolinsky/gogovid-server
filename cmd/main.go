@@ -5,6 +5,7 @@ import (
 	"go-streamer/internal/repositorioes"
 	"go-streamer/internal/utils"
 	"log"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,7 @@ func main() {
 	}
 
 	s3Repo := repositorioes.NewS3Repo()
+	dbRepo := repositorioes.NewDBRepo(os.Getenv("DATABASE_ENGINE"))
 
 	r := gin.Default()
 
@@ -27,6 +29,7 @@ func main() {
 	r.Use(cors.New(corsConf))
 	r.Use(func(c *gin.Context) {
 		c.Set(utils.S3_REPO_CTX_KEY, s3Repo)
+		c.Set(utils.DB_REPO_CTX_KEY, dbRepo)
 		c.Next()
 	})
 
