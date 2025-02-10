@@ -11,7 +11,7 @@ import (
 )
 
 type DBRepo struct {
-	db *gorm.DB
+	Db *gorm.DB
 }
 
 func NewDBRepo(engine string) *DBRepo {
@@ -39,7 +39,7 @@ func NewDBRepo(engine string) *DBRepo {
 	}
 
 	repo := &DBRepo{
-		db: db,
+		Db: db,
 	}
 
 	if os.Getenv("ENVIRONMENT") == "dev" {
@@ -50,7 +50,7 @@ func NewDBRepo(engine string) *DBRepo {
 }
 
 func (r *DBRepo) migrateSchemas() {
-	err := r.db.AutoMigrate(
+	err := r.Db.AutoMigrate(
 		&models.Subscription{},
 		&models.User{},
 		&models.Video{},

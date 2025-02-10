@@ -2,6 +2,7 @@ package main
 
 import (
 	"go-streamer/internal/handlers"
+	"go-streamer/internal/handlers/oauth2"
 	"go-streamer/internal/repositorioes"
 	"go-streamer/internal/utils"
 	"log"
@@ -30,8 +31,13 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		c.Set(utils.S3_REPO_CTX_KEY, s3Repo)
 		c.Set(utils.DB_REPO_CTX_KEY, dbRepo)
+		c.Set(utils.GOOGLE_OAUTH_CONF_CTX_KEY, oauth2.NewGoogleOauthConfig())
+		c.Set(utils.GITHUB_OAUTH_CONF_CTX_KEY, oauth2.NewGithubOauthConfig())
 		c.Next()
 	})
+
+	// Oauth2 Routes
+	oauth2.Oauth2Handler(r)
 
 	r.GET("/ping", func(c *gin.Context) {
 		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
