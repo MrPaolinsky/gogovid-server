@@ -34,9 +34,6 @@ RUN wget https://github.com/shaka-project/shaka-packager/releases/download/v2.6.
 # Build the Go application
 RUN make build
 
-# Copy the Go binary from the builder stage
-COPY bin/gogovid /usr/local/bin/gogovid
-
 # Expose the port your Go server will run on
 EXPOSE 8080
 
