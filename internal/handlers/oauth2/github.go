@@ -2,7 +2,9 @@ package oauth2
 
 import (
 	"context"
+	"crypto/hmac"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-streamer/internal/models"
 	"go-streamer/internal/repositorioes"
@@ -11,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	oa2 "golang.org/x/oauth2"
@@ -72,30 +75,31 @@ func NewGithubOauthConfig() *GithubOauthConfig {
 
 func AuthGithub(c *gin.Context) {
 	cfg := c.MustGet(utils.GITHUB_OAUTH_CONF_CTX_KEY).(*GithubOauthConfig)
-	url := cfg.Config.AuthCodeURL("TODO")
+	state, err := generateOAuthState()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to create auth intent with github")
+		return
+	}
+
+	// Encrypt state before storing cookie
+	encryptedState, err := utils.EncryptCookieValue(state)
+	if err != nil {
+		fmt.Println(err)
+		c.String(http.StatusInternalServerError, "Failed to secure connection")
+		return
+	}
+
+	setSecureStateCookie(c, stateCookieName, encryptedState, int(stateExpiration.Seconds()))
+	url := cfg.Config.AuthCodeURL(state)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
 func AuthGithubCallback(c *gin.Context) {
 	cfg := c.MustGet(utils.GITHUB_OAUTH_CONF_CTX_KEY).(*GithubOauthConfig)
+	resp, err := handleCallback(*cfg, c)
 
-	if c.Query("state") != "TODO" {
-		c.String(http.StatusBadRequest, "InvalidState")
-		return
-	}
-
-	code := c.Query("code")
-	token, err := cfg.Config.Exchange(context.TODO(), code)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to exchange token")
-		return
-	}
-
-	// Use the token to fetch user info
-	client := cfg.Config.Client(context.TODO(), token)
-	resp, err := client.Get("https://api.github.com/user")
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to get user info")
+		c.String(http.StatusUnauthorized, "Where are you going?")
 		return
 	}
 
@@ -109,13 +113,61 @@ func AuthGithubCallback(c *gin.Context) {
 	userInfo := mapGitHubUserToCreateUser(ghUser)
 	dbRepo := c.MustGet(utils.DB_REPO_CTX_KEY).(*repositorioes.DBRepo)
 	newUser, err := cruds.NewUsersCrud(dbRepo).CreateOrUpdateUser(*userInfo)
-
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Failed to create user")
 		return
 	}
 
-	c.JSON(http.StatusOK, newUser)
+	jwtToken, err := generateJWTToken(strconv.Itoa(int(newUser.ID)))
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to create auth session")
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessAuthIntentResponse[*models.User]{
+		Token:           jwtToken,
+		UserInformation: newUser,
+	})
+}
+
+func handleCallback(cfg GithubOauthConfig, c *gin.Context) (*http.Response, error) {
+	state := c.Query("state")
+	if state == "" {
+		c.String(http.StatusBadRequest, "Missing state parameter")
+		return nil, nil
+	}
+
+	// Get and decrypt stored state
+	encryptedStoredState, err := c.Cookie(stateCookieName)
+	if err != nil {
+		return nil, err
+	}
+
+	storedState, err := utils.DecryptCookieValue(encryptedStoredState)
+	if err != nil {
+		return nil, err
+	}
+
+	setSecureStateCookie(c, stateCookieName, "", -1)
+
+	if !hmac.Equal([]byte(storedState), []byte(state)) {
+		return nil, errors.New("Callback state do not match cookie state")
+	}
+
+	code := c.Query("code")
+	token, err := cfg.Config.Exchange(context.TODO(), code)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the token to fetch user info
+	client := cfg.Config.Client(context.TODO(), token)
+	resp, err := client.Get("https://api.github.com/user")
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func parseGitHubResponse(resp *http.Response) (*GitHubUserResponse, error) {
