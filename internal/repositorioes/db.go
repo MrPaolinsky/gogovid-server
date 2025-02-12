@@ -27,10 +27,14 @@ func NewDBRepo(engine string) *DBRepo {
 			log.Panic("Error creating postgresql connection")
 		}
 	} else if engine == "mariadb" {
-		db, err = gorm.Open(mysql.New(mysql.Config{
-			DSN: os.Getenv("DATABASE_URI"),
-		}), &gorm.Config{})
-
+		db, err = gorm.Open(
+			mysql.New(mysql.Config{
+				DSN: os.Getenv("DATABASE_URI"),
+			}),
+			&gorm.Config{
+				DisableForeignKeyConstraintWhenMigrating: true,
+			},
+		)
 		if err != nil {
 			log.Panic("Error creating mariadb connection")
 		}
