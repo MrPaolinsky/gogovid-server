@@ -6,6 +6,7 @@ import (
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -52,6 +53,24 @@ func UploadVideo(c *gin.Context) {
 	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
+	}
+
+	defer func() {
+		err1 := os.Remove(tempFilePath)
+		err2 := os.RemoveAll(tempFilePath)
+
+		if err1 != nil || err2 != nil {
+			log.Println("Error deleting upload files: ", err1, "\n", err2)
+		}
+	}()
+
+	isMP4, err := utils.FileIsMP4(tempFilePath)
+	if !isMP4 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Upload must be mp4"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vide is not an mp4 or it is corrupted"})
 	}
 
 	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, func(path string) {

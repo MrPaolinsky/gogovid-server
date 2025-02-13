@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"go-streamer/internal/utils"
+	"log"
 	"net/http"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 
 func AuthMiddleware(c *gin.Context) {
 	tokenString := c.GetHeader("Authorization")
+	log.Println(tokenString)
 	if tokenString == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unautorizerd"})
 		return
@@ -19,7 +21,7 @@ func AuthMiddleware(c *gin.Context) {
 	token, err := jwt.Parse(
 		tokenString,
 		func(token *jwt.Token) (interface{}, error) {
-			return os.Getenv("JWT_KEY"), nil
+			return []byte(os.Getenv("JWT_KEY")), nil
 		},
 	)
 

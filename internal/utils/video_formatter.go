@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go-streamer/internal/models"
 	"log"
-	"os"
 	"os/exec"
 	"time"
 )
@@ -40,15 +39,6 @@ var qualities [3]models.VideoQuality = [3]models.VideoQuality{
 func ConvertAndFormatToFragmentedMP4(videoPath string, fn FormattingCallback) error {
 	name := fmt.Sprintf("gogovid-%d", time.Now().UnixMilli())
 	actionPath := "/tmp/" + name
-
-	defer func() {
-		err1 := os.Remove(videoPath)
-		err2 := os.RemoveAll(actionPath)
-
-		if err1 != nil || err2 != nil {
-			log.Println("Error deleting upload files: ", err1, "\n", err2)
-		}
-	}()
 
 	newFolderCmd := exec.Command("mkdir", name)
 	newFolderCmd.Dir = "/tmp/"

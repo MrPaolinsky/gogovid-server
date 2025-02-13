@@ -29,7 +29,7 @@ func NewDBRepo(engine string) *DBRepo {
 	} else if engine == "mariadb" {
 		db, err = gorm.Open(
 			mysql.New(mysql.Config{
-				DSN: os.Getenv("DATABASE_URI"),
+				DSN: os.Getenv("DATABASE_URI") + "?parseTime=true",
 			}),
 			&gorm.Config{
 				DisableForeignKeyConstraintWhenMigrating: true,
