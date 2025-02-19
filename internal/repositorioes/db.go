@@ -60,6 +60,7 @@ func (r *DBRepo) migrateSchemas() {
 		&models.Video{},
 		&models.ApiToken{},
 		&models.TokenHistory{},
+		&models.DRMKey{},
 	)
 
 	if err != nil {

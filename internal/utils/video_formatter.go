@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-streamer/internal/models"
 	"log"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -36,24 +37,22 @@ var qualities [3]models.VideoQuality = [3]models.VideoQuality{
 // Generate different qualities for video and then generates the mpd manifest and all its fragments,
 // it deletes all the files once the excecution of the function is completed, pass a callback func
 // to do something with the files
-func ConvertAndFormatToFragmentedMP4(videoPath string, fn FormattingCallback) error {
+func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo *models.DRMInfo, fn FormattingCallback) error {
 	name := fmt.Sprintf("gogovid-%d", time.Now().UnixMilli())
 	actionPath := "/tmp/" + name
 
-	newFolderCmd := exec.Command("mkdir", name)
-	newFolderCmd.Dir = "/tmp/"
-	if err := newFolderCmd.Run(); err != nil {
-		log.Println("Error creating action folder")
+	// Create working directory
+	if err := os.MkdirAll(actionPath, 0755); err != nil {
 		return err
 	}
 
-	err := generateVideoResolutionsForPackager(videoPath, actionPath, name)
+	err := generateVideoResolutions(videoPath, actionPath, name)
 	if err != nil {
 		log.Println("Error generation multiple resolutions for video")
 		return err
 	}
 
-	err = generateFragmentedMP4(videoPath, actionPath, name)
+	err = generateEncryptedFragmentedMP4(videoPath, actionPath, name, drmInfo)
 
 	if err != nil {
 		log.Println("Error generatiing fragmented mp4")
@@ -65,7 +64,7 @@ func ConvertAndFormatToFragmentedMP4(videoPath string, fn FormattingCallback) er
 	return nil
 }
 
-func generateVideoResolutionsForPackager(filePath string, actionPath string, name string) error {
+func generateVideoResolutions(filePath string, actionPath string, name string) error {
 	for i := 0; i < len(qualities); i++ {
 		cmd := exec.Command(
 			"ffmpeg",
@@ -87,35 +86,49 @@ func generateVideoResolutionsForPackager(filePath string, actionPath string, nam
 	return nil
 }
 
-func generateFragmentedMP4(filePath string, actionPath string, name string) error {
-	fragmentQualityCommands := []string{}
+func generateEncryptedFragmentedMP4(filePath, actionPath, name string, drmInfo *models.DRMInfo) error {
+	var packagerArgs []string
 
-	for i := 0; i < len(qualities); i++ {
-		fragmentQualityCommands = append(
-			fragmentQualityCommands,
+	// Add input streams with encryption
+	for _, quality := range qualities {
+		packagerArgs = append(packagerArgs,
 			fmt.Sprintf(
-				"input=%s-%d.mp4,stream=video,segment_template=%s-%d_$Number$.m4s,init_segment=%s-%d_init.m4s",
-				name, qualities[i].ResolutionY,
-				name, qualities[i].ResolutionY,
-				name, qualities[i].ResolutionY,
+				"input=%s-%d.mp4,stream=video,segment_template=%s-%d_$Number$.m4s,"+
+					"init_segment=%s-%d_init.m4s,"+
+					"encryption_key=%s,key_id=%s,"+
+					"protection_scheme=cenc",
+				name, quality.ResolutionY,
+				name, quality.ResolutionY,
+				name, quality.ResolutionY,
+				drmInfo.Key, drmInfo.KeyID,
 			),
 		)
 	}
 
-	fragmentQualityCommands = append(
-		fragmentQualityCommands,
-		fmt.Sprintf("input=%s,stream=audio,segment_template=audio_$Number$.m4s,init_segment=audio_init.m4s", filePath),
+	// Add audio stream with encryption
+	packagerArgs = append(packagerArgs,
+		fmt.Sprintf(
+			"input=%s,stream=audio,"+
+				"segment_template=audio_$Number$.m4s,"+
+				"init_segment=audio_init.m4s,"+
+				"encryption_key=%s,key_id=%s,"+
+				"protection_scheme=cenc",
+			filePath,
+			drmInfo.Key, drmInfo.KeyID,
+		),
+	)
+
+	// Add general packager arguments
+	packagerArgs = append(packagerArgs,
 		"--generate_static_live_mpd",
 		"--mpd_output", fmt.Sprintf("%s.mpd", name),
 		"--fragment_duration", "8",
 		"--segment_duration", "8",
+		"--enable_raw_key_encryption",
+		"--protection_systems", "Widevine,PlayReady",
 	)
 
-	cmd := exec.Command(
-		"packager",
-		fragmentQualityCommands...,
-	)
-
+	cmd := exec.Command("packager", packagerArgs...)
 	cmd.Dir = actionPath
 
 	var outb, errb bytes.Buffer
@@ -123,7 +136,7 @@ func generateFragmentedMP4(filePath string, actionPath string, name string) erro
 	cmd.Stderr = &errb
 
 	if err := cmd.Run(); err != nil {
-		log.Println("out:", outb.String(), "\nerr:", errb.String())
+		log.Printf("Packager output: %s\nError: %s\n", outb.String(), errb.String())
 		return err
 	}
 

@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"fmt"
+	"go-streamer/internal/models"
 	"go-streamer/internal/repositorioes"
+	"go-streamer/internal/repositorioes/cruds"
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
@@ -50,6 +52,7 @@ func UploadVideo(c *gin.Context) {
 	}
 
 	tempFilePath := fmt.Sprintf("/tmp/%s", file.Filename)
+
 	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
@@ -73,7 +76,19 @@ func UploadVideo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vide is not an mp4 or it is corrupted"})
 	}
 
-	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, func(path string) {
+	// Generate DRM keys
+	keyID, key, err := utils.GenerateDRMKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate DRM keys"})
+		return
+	}
+
+	drmInfo := &models.DRMInfo{
+		KeyID: keyID,
+		Key:   utils.FormatKeyToHex(key),
+	}
+
+	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, drmInfo, func(path string) {
 		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
 		err := repo.UploadFragmentedVideoFromPath(path, file.Filename)
 
@@ -85,8 +100,23 @@ func UploadVideo(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save or process file"})
 		log.Println(err)
 	}
 
+	dbRepo := c.MustGet(utils.DB_REPO_CTX_KEY).(*repositorioes.DBRepo)
+	videosCrud := cruds.NewVideosCrud(dbRepo)
+	video := &models.Video{
+		Name:            file.Filename,
+		UserId:          0, // TODO: get user id
+		DRMInfo:         drmInfo,
+		DurationMinutes: 0, // TODO: SET DURATION MINUTES
+	}
+
+	if _, err := videosCrud.CreateVideo(video); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save video"})
+		return
+	}
+
+	c.JSON(http.StatusOK, video)
 }

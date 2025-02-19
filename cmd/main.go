@@ -2,8 +2,11 @@ package main
 
 import (
 	"go-streamer/internal/handlers"
+	"go-streamer/internal/handlers/drm"
 	"go-streamer/internal/handlers/oauth2"
 	"go-streamer/internal/repositorioes"
+	"go-streamer/internal/repositorioes/cruds"
+	"go-streamer/internal/services"
 	"go-streamer/internal/utils"
 	"log"
 	"os"
@@ -36,17 +39,25 @@ func main() {
 		c.Next()
 	})
 
-	// Oauth2 Routes
-	oauth2.Oauth2Handler(r)
-
 	r.GET("/ping", func(c *gin.Context) {
 		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
 		repo.TestListObject()
 		c.JSON(200, gin.H{"message": "pong"})
 	})
-	r.GET("/video/:fileId", handlers.ServeVideo)
 
+	// DRM routes
+	drmCrud := cruds.NewDRMCrud(dbRepo)
+	drmService := services.NewDRMService(drmCrud)
+	drmHandler := drm.NewDRMHandler(drmService)
+
+	r.POST("/drm/license", drmHandler.HandleLicenseRequest)
+
+	// Video routes
+	r.GET("/video/:fileId", handlers.ServeVideo)
 	r.POST("/video", handlers.AuthMiddleware, handlers.UploadVideo)
+
+	// Oauth2 Routes
+	oauth2.Oauth2Handler(r)
 
 	r.Run()
 }
