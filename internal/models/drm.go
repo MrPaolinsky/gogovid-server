@@ -6,11 +6,32 @@ import (
 	"gorm.io/gorm"
 )
 
+type DRMLabel string
+
+const (
+	AUDIO DRMLabel = "AUDIO"
+	R480  DRMLabel = "R480"
+	R720  DRMLabel = "R720"
+	R1080 DRMLabel = "R1080"
+)
+
+var Labels []DRMLabel = []DRMLabel{
+	AUDIO,
+	R480,
+	R720,
+	R1080,
+}
+
 type DRMKey struct {
 	gorm.Model
-	VideoId uint   `gorm:"unique"`
-	KeyId   string `gorm:"unique"`
-	Value   []byte // The actual encryption key
+	VideoId uint
+	DRMInfo DRMLabel `gorm:"embedded"`
+}
+
+type DRMInfo struct {
+	KeyID string `gorm:"unique"`
+	Key   []byte
+	Label DRMLabel
 }
 
 type LicenseRequest struct {

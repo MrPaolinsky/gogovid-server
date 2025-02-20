@@ -2,11 +2,8 @@ package main
 
 import (
 	"go-streamer/internal/handlers"
-	"go-streamer/internal/handlers/drm"
 	"go-streamer/internal/handlers/oauth2"
 	"go-streamer/internal/repositorioes"
-	"go-streamer/internal/repositorioes/cruds"
-	"go-streamer/internal/services"
 	"go-streamer/internal/utils"
 	"log"
 	"os"
@@ -44,13 +41,6 @@ func main() {
 		repo.TestListObject()
 		c.JSON(200, gin.H{"message": "pong"})
 	})
-
-	// DRM routes
-	drmCrud := cruds.NewDRMCrud(dbRepo)
-	drmService := services.NewDRMService(drmCrud)
-	drmHandler := drm.NewDRMHandler(drmService)
-
-	r.POST("/drm/license", drmHandler.HandleLicenseRequest)
 
 	// Video routes
 	r.GET("/video/:fileId", handlers.ServeVideo)

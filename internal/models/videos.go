@@ -8,17 +8,9 @@ type VideoQuality struct {
 	Bitrate     uint16
 }
 
-type DRMInfo struct {
-	KeyID   string
-	Key     string
-	KID     string
-	PSSHBox string
-}
-
 type Video struct {
 	gorm.Model
 	UserId          uint
 	Name            string
 	DurationMinutes uint
-	DRMInfo         *DRMInfo `gorm:"embedded"`
 }

@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"fmt"
-	"go-streamer/internal/models"
 	"go-streamer/internal/repositorioes"
-	"go-streamer/internal/repositorioes/cruds"
+	videoservice "go-streamer/internal/services/video_service"
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
@@ -13,7 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ServeVideo(c *gin.Context) {
+type VideoHandler struct {
+	vs *videoservice.VideoService
+}
+
+func NewVideoHandler(vs *videoservice.VideoService) *VideoHandler {
+	return &VideoHandler{vs: vs}
+}
+
+func (vh *VideoHandler) ServeVideo(c *gin.Context) {
 	fileId := c.Param("fileId")
 	file := fileId
 
@@ -44,16 +50,15 @@ func ServeVideo(c *gin.Context) {
 	)
 }
 
-func UploadVideo(c *gin.Context) {
+func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 	file, err := c.FormFile("video")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No file found in request"})
 		return
 	}
 
-	tempFilePath := fmt.Sprintf("/tmp/%s", file.Filename)
-
-	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
+	tempFilePath, err := vh.vs.SetupTempFile(file)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
 	}
@@ -76,44 +81,8 @@ func UploadVideo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vide is not an mp4 or it is corrupted"})
 	}
 
-	// Generate DRM keys
-	keyID, key, err := utils.GenerateDRMKey()
+	video, err := vh.vs.StoreVideo(tempFilePath, file)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate DRM keys"})
-		return
-	}
-
-	drmInfo := &models.DRMInfo{
-		KeyID: keyID,
-		Key:   utils.FormatKeyToHex(key),
-	}
-
-	err = utils.ConvertAndFormatToFragmentedMP4(tempFilePath, drmInfo, func(path string) {
-		repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
-		err := repo.UploadFragmentedVideoFromPath(path, file.Filename)
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload files"})
-			log.Println(err)
-			return
-		}
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save or process file"})
-		log.Println(err)
-	}
-
-	dbRepo := c.MustGet(utils.DB_REPO_CTX_KEY).(*repositorioes.DBRepo)
-	videosCrud := cruds.NewVideosCrud(dbRepo)
-	video := &models.Video{
-		Name:            file.Filename,
-		UserId:          0, // TODO: get user id
-		DRMInfo:         drmInfo,
-		DurationMinutes: 0, // TODO: SET DURATION MINUTES
-	}
-
-	if _, err := videosCrud.CreateVideo(video); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save video"})
 		return
 	}

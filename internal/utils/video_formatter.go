@@ -15,14 +15,15 @@ ffmpeg -i t.mp4 -vf "scale=1920:1080" -c:v libx264 -b:v 7000k -c:a aac -b:a 128k
 ffmpeg -i t.mp4 -vf "scale=1280:720" -c:v libx264 -b:v 2500k -c:a aac -b:a 128k t_720p.mp4
 ffmpeg -i t.mp4 -vf "scale=854:480" -c:v libx264 -b:v 1200k -c:a aac -b:a 128k t_480p.mp4
 
-	packager \
-	  input=t_1080p.mp4,stream=video,segment_template=t_1080p_\$Number\$.m4s,init_segment=t_1080p_init.m4s \
-	  input=t_720p.mp4,stream=video,segment_template=t_720p_\$Number\$.m4s,init_segment=t_720p_init.m4s \
-	  input=t_480p.mp4,stream=video,segment_template=t_480p_\$Number\$.m4s,init_segment=t_480p_init.m4s \
-	  input=t_1080p.mp4,stream=audio,segment_template=audio_\$Number\$.m4s,init_segment=audio_init.m4s \
-	  --generate_static_live_mpd --mpd_output ./manifest.mpd \
-	  --fragment_duration 8 \
-	  --segment_duration 8
+packager \
+  in=audio.mp4,stream=audio,output=encrypted_audio.mp4,drm_label=AUDIO \
+  in=480p.mp4,stream=video,output=encrypted_480p.mp4,drm_label=SD \
+  in=720p.mp4,stream=video,output=encrypted_720p.mp4,drm_label=HD \
+  in=1080p.mp4,stream=video,output=encrypted_1080p.mp4,drm_label=HD \
+  --enable_raw_key_encryption \
+  --keys label=AUDIO:key_id=1234567890abcdef1234567890abcdef:key=abcdef1234567890abcdef1234567890,label=SD:key_id=234567890abcdef1234567890abcdef1:key=bcdef1234567890abcdef1234567890a,label=HD:key_id=34567890abcdef1234567890abcdef12:key=cdef1234567890abcdef1234567890ab \
+  --protection_systems Widevine,PlayReady \
+  --mpd_output stream.mpd
 */
 
 // Callback with directory where all the generated files are.
@@ -37,7 +38,7 @@ var qualities [3]models.VideoQuality = [3]models.VideoQuality{
 // Generate different qualities for video and then generates the mpd manifest and all its fragments,
 // it deletes all the files once the excecution of the function is completed, pass a callback func
 // to do something with the files
-func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo *models.DRMInfo, fn FormattingCallback) error {
+func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo []*models.DRMInfo, fn FormattingCallback) error {
 	name := fmt.Sprintf("gogovid-%d", time.Now().UnixMilli())
 	actionPath := "/tmp/" + name
 
