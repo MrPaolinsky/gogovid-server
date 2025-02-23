@@ -13,12 +13,13 @@ import (
 )
 
 type VideoService struct {
-	c    *gin.Context
-	repo *repositorioes.S3Repo
+	c      *gin.Context
+	s3Repo *repositorioes.S3Repo
+	dbRepo *repositorioes.DBRepo
 }
 
-func NewVideoService(repo *repositorioes.S3Repo) *VideoService {
-	return &VideoService{repo: repo}
+func NewVideoService(s3 *repositorioes.S3Repo, db *repositorioes.DBRepo) *VideoService {
+	return &VideoService{s3Repo: s3, dbRepo: db}
 }
 
 func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader) (*models.Video, error) {
@@ -29,8 +30,7 @@ func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader) (*mo
 	}
 
 	err = utils.ConvertAndFormatToFragmentedMP4(path, drmInfo, func(path string) {
-		repo := vs.c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
-		err := repo.UploadFragmentedVideoFromPath(path, file.Filename)
+		err := vs.s3Repo.UploadFragmentedVideoFromPath(path, file.Filename)
 
 		if err != nil {
 			log.Println(err)
@@ -43,8 +43,7 @@ func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader) (*mo
 		return nil, err
 	}
 
-	dbRepo := vs.c.MustGet(utils.DB_REPO_CTX_KEY).(*repositorioes.DBRepo)
-	videosCrud := cruds.NewVideosCrud(dbRepo)
+	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
 	video := &models.Video{
 		Name:            file.Filename,
 		UserId:          0, // TODO: get user id

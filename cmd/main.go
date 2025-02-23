@@ -4,6 +4,7 @@ import (
 	"go-streamer/internal/handlers"
 	"go-streamer/internal/handlers/oauth2"
 	"go-streamer/internal/repositorioes"
+	videoservice "go-streamer/internal/services/video_service"
 	"go-streamer/internal/utils"
 	"log"
 	"os"
@@ -43,8 +44,11 @@ func main() {
 	})
 
 	// Video routes
-	r.GET("/video/:fileId", handlers.ServeVideo)
-	r.POST("/video", handlers.AuthMiddleware, handlers.UploadVideo)
+	vs := videoservice.NewVideoService(s3Repo, dbRepo)
+	vh := handlers.NewVideoHandler(vs)
+
+	r.GET("/video/:fileId", vh.ServeVideo)
+	r.POST("/video", handlers.AuthMiddleware, vh.UploadVideo)
 
 	// Oauth2 Routes
 	oauth2.Oauth2Handler(r)

@@ -28,7 +28,7 @@ RUN apk add --no-cache \
     libstdc++ \
     make
 
-RUN wget https://github.com/shaka-project/shaka-packager/releases/download/v2.6.1/packager-linux-x64 -O /usr/local/bin/packager \
+RUN wget https://github.com/shaka-project/shaka-packager/releases/download/v3.4.2/packager-linux-x64 -O /usr/local/bin/packager \
     && chmod +x /usr/local/bin/packager
 
 # Build the Go application

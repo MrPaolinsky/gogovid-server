@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go-streamer/internal/models"
 	"log"
@@ -29,11 +30,11 @@ packager \
 // Callback with directory where all the generated files are.
 type FormattingCallback func(string)
 
-var qualities [3]models.VideoQuality = [3]models.VideoQuality{
-	{Bitrate: 7000, ResolutionX: 1920, ResolutionY: 1080},
-	{Bitrate: 2500, ResolutionX: 1280, ResolutionY: 720},
-	{Bitrate: 1200, ResolutionX: 854, ResolutionY: 480},
-}
+var res1080 = models.VideoQuality{Bitrate: 7000, ResolutionX: 1920, ResolutionY: 1080}
+var res720 = models.VideoQuality{Bitrate: 2500, ResolutionX: 1280, ResolutionY: 720}
+var res480 = models.VideoQuality{Bitrate: 1200, ResolutionX: 854, ResolutionY: 480}
+
+var qualities = [3]models.VideoQuality{res1080, res720, res480}
 
 // Generate different qualities for video and then generates the mpd manifest and all its fragments,
 // it deletes all the files once the excecution of the function is completed, pass a callback func
@@ -66,7 +67,7 @@ func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo []*models.DRMInfo
 }
 
 func generateVideoResolutions(filePath string, actionPath string, name string) error {
-	for i := 0; i < len(qualities); i++ {
+	for i := range len(qualities) {
 		cmd := exec.Command(
 			"ffmpeg",
 			"-i", fmt.Sprintf("%s", filePath),
@@ -87,45 +88,69 @@ func generateVideoResolutions(filePath string, actionPath string, name string) e
 	return nil
 }
 
-func generateEncryptedFragmentedMP4(filePath, actionPath, name string, drmInfo *models.DRMInfo) error {
+func generateEncryptedFragmentedMP4(filePath, actionPath, name string, drmInfo []*models.DRMInfo) error {
 	var packagerArgs []string
 
-	// Add input streams with encryption
-	for _, quality := range qualities {
-		packagerArgs = append(packagerArgs,
-			fmt.Sprintf(
-				"input=%s-%d.mp4,stream=video,segment_template=%s-%d_$Number$.m4s,"+
-					"init_segment=%s-%d_init.m4s,"+
-					"encryption_key=%s,key_id=%s,"+
-					"protection_scheme=cenc",
-				name, quality.ResolutionY,
-				name, quality.ResolutionY,
-				name, quality.ResolutionY,
-				drmInfo.Key, drmInfo.KeyID,
-			),
-		)
+	for _, info := range drmInfo {
+		if info.Label == models.AUDIO {
+			packagerArgs = append(packagerArgs,
+				fmt.Sprintf(
+					"in=%s,stream=audio,segment_template=audio_$Number$.m4s,"+
+						"init_segment=audio_init.m4s,"+
+						"drm_label=%s",
+					filePath, info.Label,
+				),
+			)
+		} else {
+			quality, err := drmInfoToQuality(info)
+			if err != nil {
+				return err
+			}
+			packagerArgs = append(packagerArgs,
+				fmt.Sprintf(
+					"in=%s-%d.mp4,stream=video,segment_template=%s-%d_$Number$.m4s,"+
+						"init_segment=%s-%d_init.m4s,"+
+						"drm_label=%s",
+					name, quality.ResolutionY,
+					name, quality.ResolutionY,
+					name, quality.ResolutionY,
+					info.Label,
+				),
+			)
+		}
 	}
 
-	// Add audio stream with encryption
-	packagerArgs = append(packagerArgs,
-		fmt.Sprintf(
-			"input=%s,stream=audio,"+
-				"segment_template=audio_$Number$.m4s,"+
-				"init_segment=audio_init.m4s,"+
-				"encryption_key=%s,key_id=%s,"+
-				"protection_scheme=cenc",
-			filePath,
-			drmInfo.Key, drmInfo.KeyID,
-		),
-	)
-
-	// Add general packager arguments
+	// Append packager global configurations and keys for each label
 	packagerArgs = append(packagerArgs,
 		"--generate_static_live_mpd",
 		"--mpd_output", fmt.Sprintf("%s.mpd", name),
-		"--fragment_duration", "8",
 		"--segment_duration", "8",
+		"--fragment_duration", "8",
 		"--enable_raw_key_encryption",
+		"--protection_scheme", "cenc",
+		"--keys",
+	)
+
+	var keys string
+	for i, info := range drmInfo {
+		shouldAddComma := func() string {
+			if i < len(drmInfo)-1 {
+				return ","
+			}
+			return ""
+		}
+
+		keys += fmt.Sprintf(
+			"label=%s:key_id=%s:key=%s%s",
+			info.Label,
+			info.KeyID,
+			FormatKeyToHex(info.Key),
+			shouldAddComma(),
+		)
+	}
+
+	packagerArgs = append(packagerArgs,
+		keys,
 		"--protection_systems", "Widevine,PlayReady",
 	)
 
@@ -137,9 +162,26 @@ func generateEncryptedFragmentedMP4(filePath, actionPath, name string, drmInfo *
 	cmd.Stderr = &errb
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Packager output: %s\nError: %s\n", outb.String(), errb.String())
+		log.Println(packagerArgs)
+		log.Printf("Packager output: %s\n %s\n", outb.String(), errb.String())
 		return err
 	}
 
 	return nil
+}
+
+func drmInfoToQuality(drmInfo *models.DRMInfo) (*models.VideoQuality, error) {
+	if drmInfo.Label == models.AUDIO {
+		return nil, errors.New("Cant convert AUDIO label to resolution")
+	} else {
+		switch drmInfo.Label {
+		case models.R1080:
+			return &res1080, nil
+		case models.R720:
+			return &res720, nil
+		case models.R480:
+			return &res480, nil
+		}
+	}
+	return nil, errors.New("No valid DRM info found")
 }
