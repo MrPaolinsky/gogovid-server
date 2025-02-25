@@ -11,22 +11,6 @@ import (
 	"time"
 )
 
-/*
-ffmpeg -i t.mp4 -vf "scale=1920:1080" -c:v libx264 -b:v 7000k -c:a aac -b:a 128k t_1080p.mp4
-ffmpeg -i t.mp4 -vf "scale=1280:720" -c:v libx264 -b:v 2500k -c:a aac -b:a 128k t_720p.mp4
-ffmpeg -i t.mp4 -vf "scale=854:480" -c:v libx264 -b:v 1200k -c:a aac -b:a 128k t_480p.mp4
-
-packager \
-  in=audio.mp4,stream=audio,output=encrypted_audio.mp4,drm_label=AUDIO \
-  in=480p.mp4,stream=video,output=encrypted_480p.mp4,drm_label=SD \
-  in=720p.mp4,stream=video,output=encrypted_720p.mp4,drm_label=HD \
-  in=1080p.mp4,stream=video,output=encrypted_1080p.mp4,drm_label=HD \
-  --enable_raw_key_encryption \
-  --keys label=AUDIO:key_id=1234567890abcdef1234567890abcdef:key=abcdef1234567890abcdef1234567890,label=SD:key_id=234567890abcdef1234567890abcdef1:key=bcdef1234567890abcdef1234567890a,label=HD:key_id=34567890abcdef1234567890abcdef12:key=cdef1234567890abcdef1234567890ab \
-  --protection_systems Widevine,PlayReady \
-  --mpd_output stream.mpd
-*/
-
 // Callback with directory where all the generated files are.
 type FormattingCallback func(string)
 

@@ -57,7 +57,7 @@ func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 		return
 	}
 
-	tempFilePath, err := vh.vs.SetupTempFile(file)
+	tempFilePath, err := vh.vs.SetupTempFile(file, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
@@ -81,7 +81,7 @@ func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vide is not an mp4 or it is corrupted"})
 	}
 
-	video, err := vh.vs.StoreVideo(tempFilePath, file)
+	video, err := vh.vs.StoreVideo(tempFilePath, file, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save video"})
 		return

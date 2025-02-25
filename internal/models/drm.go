@@ -25,7 +25,7 @@ var Labels []DRMLabel = []DRMLabel{
 type DRMKey struct {
 	gorm.Model
 	VideoId uint
-	DRMInfo DRMLabel `gorm:"embedded"`
+	DRMInfo DRMInfo `gorm:"embedded"`
 }
 
 type DRMInfo struct {

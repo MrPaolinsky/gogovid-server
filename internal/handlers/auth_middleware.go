@@ -4,6 +4,7 @@ import (
 	"go-streamer/internal/utils"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -29,7 +30,12 @@ func AuthMiddleware(c *gin.Context) {
 
 	claims := token.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
+	intId, err := strconv.ParseUint(userID, 10, 0)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Malformed user id"})
+		return
+	}
 
-	c.Set(utils.USER_ID_CTX_KEY, userID)
+	c.Set(utils.USER_ID_CTX_KEY, uint(intId))
 	c.Next()
 }

@@ -22,3 +22,7 @@ func (c *DRMCrud) GetKey(keyId string) (*models.DRMKey, error) {
 	err := c.dbRepo.Db.Where("key_id = ?", keyId).First(&key).Error
 	return &key, err
 }
+
+func (c *DRMCrud) StoreManyKeys(keys []*models.DRMKey) error {
+	return c.dbRepo.Db.Create(keys).Error
+}
