@@ -13,4 +13,6 @@ type Video struct {
 	UserId          uint
 	Name            string
 	DurationMinutes uint
+    Formatted       bool
+    Route   string
 }

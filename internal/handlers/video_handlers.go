@@ -6,7 +6,6 @@ import (
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +20,13 @@ func NewVideoHandler(vs *videoservice.VideoService) *VideoHandler {
 
 func (vh *VideoHandler) ServeVideo(c *gin.Context) {
 	fileId := c.Param("fileId")
-	file := fileId
+    route := c.Query("route")
+	file := route + "/" + fileId
+
+    if route == "" {
+        c.String(http.StatusBadRequest, "Missing route query parameter")
+        return
+    }
 
 	repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
 
@@ -62,15 +67,6 @@ func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
 	}
-
-	defer func() {
-		err1 := os.Remove(tempFilePath)
-		err2 := os.RemoveAll(tempFilePath)
-
-		if err1 != nil || err2 != nil {
-			log.Println("Error deleting upload files: ", err1, "\n", err2)
-		}
-	}()
 
 	isMP4, err := utils.FileIsMP4(tempFilePath)
 	if !isMP4 {

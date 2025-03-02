@@ -34,3 +34,4 @@ go.work
 build/
 bin/
 data/
+data.sql/

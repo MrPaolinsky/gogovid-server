@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-streamer/internal/utils"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -53,7 +55,7 @@ func (r *S3Repo) TestListObject() {
 }
 
 func (r *S3Repo) GetObjectByFileName(path string) (*s3.GetObjectOutput, error) {
-	objectKey := "t.mp4/" + path
+	objectKey := path
 	result, err := r.client.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(os.Getenv("S3_BUCKET")),
 		Key:    aws.String(objectKey),
@@ -73,22 +75,30 @@ func (r *S3Repo) GetObjectByFileName(path string) (*s3.GetObjectOutput, error) {
 	return result, nil
 }
 
-func (r *S3Repo) UploadFragmentedVideoFromPath(path string, folderName string) error {
+// Return path to mpd and possible error, while delete all uploads
+// if one any error
+func (r *S3Repo) UploadFragmentedVideoFromPath(path string, folderName string) (string, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		log.Println("Error reading files in folder:", path)
-		return err
+		return "", err
 	}
+
+	folderName = fmt.Sprintf("gogovid-upload-%d", time.Now().UnixMilli()) + folderName
 
 	if folderName[len(folderName)-1:] != "/" {
 		folderName += "/"
 	}
 
+    mpdPath := folderName
 	wg := new(sync.WaitGroup)
 	processFailed := false
 	wg.Add(len(files))
 
 	for _, file := range files {
+        if utils.FileIsMPD(file.Name()) {
+            mpdPath += file.Name()
+        }
 		go r.uploadSinlgeFile(path, file, folderName, &processFailed, wg)
 	}
 
@@ -96,10 +106,10 @@ func (r *S3Repo) UploadFragmentedVideoFromPath(path string, folderName string) e
 
 	if processFailed {
 		r.DeleteFolder(folderName)
-		return fmt.Errorf("Error uploading files, reverting sccessful uploads")
+		return "", fmt.Errorf("Error uploading files, reverting sccessful uploads")
 	}
 
-	return nil
+	return mpdPath, nil
 }
 
 func (r *S3Repo) DeleteFolder(folderName string) error {

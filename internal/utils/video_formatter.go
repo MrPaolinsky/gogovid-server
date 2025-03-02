@@ -23,7 +23,7 @@ var qualities = [3]models.VideoQuality{res1080, res720, res480}
 // Generate different qualities for video and then generates the mpd manifest and all its fragments,
 // it deletes all the files once the excecution of the function is completed, pass a callback func
 // to do something with the files
-func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo []*models.DRMInfo, fn FormattingCallback) error {
+func ConvertAndFormatToFragmentedMP4(videoPath string, fn FormattingCallback) error {
 	name := fmt.Sprintf("gogovid-%d", time.Now().UnixMilli())
 	actionPath := "/tmp/" + name
 
@@ -38,7 +38,7 @@ func ConvertAndFormatToFragmentedMP4(videoPath string, drmInfo []*models.DRMInfo
 		return err
 	}
 
-	err = generateEncryptedFragmentedMP4(videoPath, actionPath, name, drmInfo)
+	err = generateFragmentedMP4(videoPath, actionPath, name)
 
 	if err != nil {
 		log.Println("Error generatiing fragmented mp4")
@@ -67,6 +67,49 @@ func generateVideoResolutions(filePath string, actionPath string, name string) e
 		if err := cmd.Run(); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func generateFragmentedMP4(filePath, actionPath, name string) error {
+	fragmentQualityCommands := []string{}
+
+	for _, quality := range qualities {
+		fragmentQualityCommands = append(
+			fragmentQualityCommands,
+			fmt.Sprintf(
+				"input=%s-%d.mp4,stream=video,segment_template=%s-%d_$Number$.m4s,init_segment=%s-%d_init.m4s",
+				name, quality.ResolutionY,
+				name, quality.ResolutionY,
+				name, quality.ResolutionY,
+			),
+		)
+	}
+
+	fragmentQualityCommands = append(
+		fragmentQualityCommands,
+		fmt.Sprintf("input=%s,stream=audio,segment_template=audio_$Number$.m4s,init_segment=audio_init.m4s", filePath),
+		"--generate_static_live_mpd",
+		"--mpd_output", fmt.Sprintf("%s.mpd", name),
+		"--fragment_duration", "8",
+		"--segment_duration", "8",
+	)
+
+	cmd := exec.Command(
+		"packager",
+		fragmentQualityCommands...,
+	)
+
+	cmd.Dir = actionPath
+
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+
+	if err := cmd.Run(); err != nil {
+		log.Println("out:", outb.String(), "\nerr:", errb.String())
+		return err
 	}
 
 	return nil

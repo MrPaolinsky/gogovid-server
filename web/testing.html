@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DASH.js Player</title>
+    <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+</head>
+
+<body>
+    <h2>DASH Streaming Player</h2>
+
+    <video id="videoPlayer" controls autoplay style="width: 80%; max-width: 800px;"></video>
+
+    <p>Total Duration: <span id="duration">Calculating...</span> seconds</p>
+
+    <script>
+        const url = "http://localhost:8080/video/gogovid-1740880638536.mpd?route=gogovid-upload-1740880667076t.mp4"; // Change to your actual MPD URL
+        const routeParam = new URL(url).searchParams.get('route');
+        const video = document.getElementById("videoPlayer");
+        const durationDisplay = document.getElementById("duration");
+
+        const player = dashjs.MediaPlayer().create();
+        player.initialize(video, url, true);
+
+        // Add request interceptor to append route parameter to all requests
+        const interceptor = function (request) {
+            // Append the route parameter to the URL
+            request.url += (request.url.includes('?') ? '&' : '?') + 'route=' + encodeURIComponent(routeParam);
+            return Promise.resolve(request);
+        };
+
+        player.addRequestInterceptor(interceptor);
+
+        // Calculate total duration when manifest is loaded
+        player.on(dashjs.MediaPlayer.events.MANIFEST_LOADED, function () {
+            const duration = player.duration(); // DASH.js calculates it based on the MPD
+            durationDisplay.textContent = duration.toFixed(2);
+        });
+    </script>
+</body>
+
+</html>

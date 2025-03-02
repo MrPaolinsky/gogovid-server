@@ -8,6 +8,7 @@ import (
 	"go-streamer/internal/utils"
 	"log"
 	"mime/multipart"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,47 +22,36 @@ func NewVideoService(s3 *repositorioes.S3Repo, db *repositorioes.DBRepo) *VideoS
 	return &VideoService{s3Repo: s3, dbRepo: db}
 }
 
+// Will create new DB entity, and create a goroutine to format it, the goroutine
+// will delete the temp files once done.
 func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader, c *gin.Context) (*models.Video, error) {
-	drmInfo, err := vs.generateKeysInfo()
-	if err != nil {
-		log.Println("Error generating keys info:", err)
-		return nil, err
-	}
-
-	err = utils.ConvertAndFormatToFragmentedMP4(path, drmInfo, func(path string) {
-		err := vs.s3Repo.UploadFragmentedVideoFromPath(path, file.Filename)
-
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	})
-
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
 	userId := c.MustGet(utils.USER_ID_CTX_KEY).(uint)
-	log.Println("HEHERHEHREHREHRHEHRER:", userId)
 	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
 	video := &models.Video{
 		Name:            file.Filename,
 		UserId:          userId,
+		Formatted:       false,
 		DurationMinutes: 0, // TODO: SET DURATION MINUTES
 	}
 
-	newVid, err := videosCrud.CreateVideo(video)
+	nv, err := videosCrud.CreateVideo(video)
 	if err != nil {
 		log.Println("Error inserting new video in database")
 		return nil, err
 	}
 
-	err = vs.storeKeysForVideo(newVid.ID, drmInfo)
-	if err != nil {
-		log.Println("Error inserting new drm keys in database")
-		return nil, err
-	}
+	go func() {
+		err := vs.formatAndUploadVideo(path, file, nv)
+
+		if err != nil {
+			log.Println(err)
+			vs.dbRepo.Db.Delete(nv)
+			return
+		} else {
+			nv.Formatted = true
+			vs.dbRepo.Db.Save(nv)
+		}
+	}()
 
 	return video, nil
 }
@@ -98,6 +88,47 @@ func (vs *VideoService) storeKeysForVideo(videoId uint, keys []*models.DRMInfo) 
 	}
 
 	return nil
+}
+
+// Intended to be used in a goroutine, pass a VideoID, and it will process it
+// and then update the Route property of the passed video.
+func (vs *VideoService) formatAndUploadVideo(
+	path string,
+	file *multipart.FileHeader,
+	nv *models.Video,
+) error {
+	defer func() {
+		err1 := os.Remove(path)
+		err2 := os.RemoveAll(path)
+
+		if err1 != nil || err2 != nil {
+			log.Println("Error deleting upload files: ", err1, "\n", err2)
+		}
+	}()
+
+	err := utils.ConvertAndFormatToFragmentedMP4(
+		path,
+		func(path string) { vs.uploadToS3(path, file, nv) },
+	)
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return err
+}
+
+func (vs *VideoService) uploadToS3(path string, file *multipart.FileHeader, nv *models.Video) {
+	route, err := vs.s3Repo.UploadFragmentedVideoFromPath(path, file.Filename)
+
+	if err != nil {
+		log.Println(err)
+		vs.dbRepo.Db.Delete(nv)
+		return
+	}
+	nv.Route = route
+	vs.dbRepo.Db.Save(nv)
 }
 
 func (vs *VideoService) generateKeysInfo() ([]*models.DRMInfo, error) {

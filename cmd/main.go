@@ -7,6 +7,7 @@ import (
 	videoservice "go-streamer/internal/services/video_service"
 	"go-streamer/internal/utils"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
@@ -42,6 +43,10 @@ func main() {
 		repo.TestListObject()
 		c.JSON(200, gin.H{"message": "pong"})
 	})
+    r.LoadHTMLGlob("web/*")
+    r.GET("/testing", func (c *gin.Context) {
+        c.HTML(http.StatusOK, "testing.html", gin.H{})
+    })
 
 	// Video routes
 	vs := videoservice.NewVideoService(s3Repo, dbRepo)
