@@ -2,7 +2,11 @@ package utils
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -30,4 +34,30 @@ func FileIsMP4(filePath string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// Will return the video duration in minutes rounded up
+func GetVideoDurationInMinutes(filePath string) (uint, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		filePath,
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("error running ffprobe: %w", err)
+	}
+
+	durationStr := strings.TrimSpace(string(output))
+	durationSec, err := strconv.ParseFloat(durationStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing duration: %w", err)
+	}
+
+	durationMin := uint(math.Ceil(durationSec / 60.0))
+
+	return durationMin, nil
 }

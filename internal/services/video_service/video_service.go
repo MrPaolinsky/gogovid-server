@@ -25,22 +25,38 @@ func NewVideoService(s3 *repositorioes.S3Repo, db *repositorioes.DBRepo) *VideoS
 // Will create new DB entity, and create a goroutine to format it, the goroutine
 // will delete the temp files once done.
 func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader, c *gin.Context) (*models.Video, error) {
-	userId := c.MustGet(utils.USER_ID_CTX_KEY).(uint)
+    var err error
+    defer func() {
+        if err != nil {
+            vs.cleanTempFiles(path)
+        }
+    }()
+
+    userId := c.MustGet(utils.USER_ID_CTX_KEY).(uint)
 	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
 	video := &models.Video{
 		Name:            file.Filename,
 		UserId:          userId,
 		Formatted:       false,
-		DurationMinutes: 0, // TODO: SET DURATION MINUTES
 	}
 
+	// Get video duration
+	d, err := utils.GetVideoDurationInMinutes(path)
+	if err != nil {
+		log.Println("Error getting video duration")
+		return nil, err
+	}
+
+	video.DurationMinutes = d
 	nv, err := videosCrud.CreateVideo(video)
+
 	if err != nil {
 		log.Println("Error inserting new video in database")
 		return nil, err
 	}
 
 	go func() {
+        defer vs.cleanTempFiles(path)
 		err := vs.formatAndUploadVideo(path, file, nv)
 
 		if err != nil {
@@ -97,15 +113,6 @@ func (vs *VideoService) formatAndUploadVideo(
 	file *multipart.FileHeader,
 	nv *models.Video,
 ) error {
-	defer func() {
-		err1 := os.Remove(path)
-		err2 := os.RemoveAll(path)
-
-		if err1 != nil || err2 != nil {
-			log.Println("Error deleting upload files: ", err1, "\n", err2)
-		}
-	}()
-
 	err := utils.ConvertAndFormatToFragmentedMP4(
 		path,
 		func(path string) { vs.uploadToS3(path, file, nv) },
@@ -117,6 +124,15 @@ func (vs *VideoService) formatAndUploadVideo(
 	}
 
 	return err
+}
+
+func (cs *VideoService) cleanTempFiles(path string) {
+	err1 := os.Remove(path)
+	err2 := os.RemoveAll(path)
+
+	if err1 != nil || err2 != nil {
+		log.Println("Error deleting upload files: ", err1, "\n", err2)
+	}
 }
 
 func (vs *VideoService) uploadToS3(path string, file *multipart.FileHeader, nv *models.Video) {
