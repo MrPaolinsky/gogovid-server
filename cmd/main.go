@@ -3,7 +3,9 @@ package main
 import (
 	"go-streamer/internal/handlers"
 	"go-streamer/internal/handlers/oauth2"
+	"go-streamer/internal/handlers/signing"
 	"go-streamer/internal/repositorioes"
+	signingservice "go-streamer/internal/services/signing_service"
 	videoservice "go-streamer/internal/services/video_service"
 	"go-streamer/internal/utils"
 	"log"
@@ -43,10 +45,15 @@ func main() {
 		repo.TestListObject()
 		c.JSON(200, gin.H{"message": "pong"})
 	})
-    r.LoadHTMLGlob("web/*")
-    r.GET("/testing", func (c *gin.Context) {
-        c.HTML(http.StatusOK, "testing.html", gin.H{})
-    })
+	r.LoadHTMLGlob("web/*")
+	r.GET("/testing", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "testing.html", gin.H{})
+	})
+
+	// Signing routes
+	ss := signingservice.NewSigningService(dbRepo, s3Repo)
+	sh := signing.NewSigningHandler(ss)
+	r.GET("/signed/:file", sh.GetSignedUrl)
 
 	// Video routes
 	vs := videoservice.NewVideoService(s3Repo, dbRepo)

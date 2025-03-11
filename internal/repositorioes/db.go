@@ -46,9 +46,9 @@ func NewDBRepo(engine string) *DBRepo {
 		Db: db,
 	}
 
-	if os.Getenv("ENVIRONMENT") == "dev" {
-		repo.migrateSchemas()
-	}
+	// if os.Getenv("ENVIRONMENT") == "dev" {
+	// 	repo.migrateSchemas()
+	// }
 
 	return repo
 }

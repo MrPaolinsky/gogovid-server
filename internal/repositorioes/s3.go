@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go-streamer/internal/utils"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,6 +54,30 @@ func (r *S3Repo) TestListObject() {
 	}
 }
 
+func (r *S3Repo) ListObjectsInFolder(path string) ([]string, error) {
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
+	output, err := r.client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(os.Getenv("S3_BUCKET")),
+		Prefix: aws.String(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var filenames []string
+	for _, object := range output.Contents {
+		filename := strings.TrimPrefix(*aws.String(*object.Key), path)
+		if !strings.Contains(filename, "/") {
+			filenames = append(filenames, filename)
+		}
+	}
+
+	return filenames, nil
+}
+
 func (r *S3Repo) GetObjectByFileName(path string) (*s3.GetObjectOutput, error) {
 	objectKey := path
 	result, err := r.client.GetObject(context.TODO(), &s3.GetObjectInput{
@@ -90,15 +114,11 @@ func (r *S3Repo) UploadFragmentedVideoFromPath(path string, folderName string) (
 		folderName += "/"
 	}
 
-    mpdPath := folderName
 	wg := new(sync.WaitGroup)
 	processFailed := false
 	wg.Add(len(files))
 
 	for _, file := range files {
-        if utils.FileIsMPD(file.Name()) {
-            mpdPath += file.Name()
-        }
 		go r.uploadSinlgeFile(path, file, folderName, &processFailed, wg)
 	}
 
@@ -109,7 +129,7 @@ func (r *S3Repo) UploadFragmentedVideoFromPath(path string, folderName string) (
 		return "", fmt.Errorf("Error uploading files, reverting sccessful uploads")
 	}
 
-	return mpdPath, nil
+	return folderName, nil
 }
 
 func (r *S3Repo) DeleteFolder(folderName string) error {
