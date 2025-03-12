@@ -9,8 +9,10 @@ import (
 	"log"
 	"mime/multipart"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kodefluence/aurelia"
 )
 
 type VideoService struct {
@@ -22,22 +24,58 @@ func NewVideoService(s3 *repositorioes.S3Repo, db *repositorioes.DBRepo) *VideoS
 	return &VideoService{s3Repo: s3, dbRepo: db}
 }
 
+func (vs *VideoService) ValidateStream(videoId uint, signature, file, expiresAt string) error {
+	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
+	video, err := videosCrud.GetVideo(videoId)
+	if err != nil {
+		return err
+	}
+
+	if video.Protected && signature == "" {
+		return fmt.Errorf("Unauthorized stream")
+	} else if video.Protected {
+		expiresAtUnix, err := strconv.Atoi(expiresAt)
+		if err != nil {
+			return err
+		}
+		if !aurelia.Authenticate(
+			os.Getenv("URL_SIGNING_KEY"),
+			fmt.Sprintf("%s:%d:%d", file, video.ID, expiresAtUnix),
+			signature,
+		) {
+			return fmt.Errorf("Invalid signature")
+		}
+	}
+
+	return nil
+}
+
+func (vs *VideoService) RouteForVideoFile(videoId uint, fileId string) (string, error) {
+	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
+	video, err := videosCrud.GetVideo(videoId)
+	if err != nil {
+		return "", err
+	}
+
+	return video.Route + "/" + fileId, nil
+}
+
 // Will create new DB entity, and create a goroutine to format it, the goroutine
 // will delete the temp files once done.
 func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader, c *gin.Context) (*models.Video, error) {
-    var err error
-    defer func() {
-        if err != nil {
-            vs.cleanTempFiles(path)
-        }
-    }()
+	var err error
+	defer func() {
+		if err != nil {
+			vs.cleanTempFiles(path)
+		}
+	}()
 
-    userId := c.MustGet(utils.USER_ID_CTX_KEY).(uint)
+	userId := c.MustGet(utils.USER_ID_CTX_KEY).(uint)
 	videosCrud := cruds.NewVideosCrud(vs.dbRepo)
 	video := &models.Video{
-		Name:            file.Filename,
-		UserId:          userId,
-		Formatted:       false,
+		Name:      file.Filename,
+		UserId:    userId,
+		Formatted: false,
 	}
 
 	// Get video duration
@@ -56,7 +94,7 @@ func (vs *VideoService) StoreVideo(path string, file *multipart.FileHeader, c *g
 	}
 
 	go func() {
-        defer vs.cleanTempFiles(path)
+		defer vs.cleanTempFiles(path)
 		err := vs.formatAndUploadVideo(path, file, nv)
 
 		if err != nil {

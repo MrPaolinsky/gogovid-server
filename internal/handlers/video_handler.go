@@ -6,6 +6,7 @@ import (
 	"go-streamer/internal/utils"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,16 +21,30 @@ func NewVideoHandler(vs *videoservice.VideoService) *VideoHandler {
 
 func (vh *VideoHandler) ServeVideo(c *gin.Context) {
 	fileId := c.Param("fileId")
-    route := c.Query("route")
-	file := route + "/" + fileId
+	videoId := c.Query("video_id")
+	expiresAt := c.Query("expires_at")
+	signature := c.Query("signature")
+	if videoId == "" || expiresAt == "" {
+		c.String(http.StatusBadRequest, "Missing video_id or expires_at query parameter")
+		return
+	}
 
-    if route == "" {
-        c.String(http.StatusBadRequest, "Missing route query parameter")
-        return
-    }
+	uintVideoId, err := strconv.ParseUint(videoId, 10, 0)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid video_id")
+		return
+	}
+
+	err = vh.vs.ValidateStream(uint(uintVideoId), signature, fileId, expiresAt)
+	if err != nil {
+		log.Println("Error validating stream:", err)
+		c.String(http.StatusUnauthorized, "You do not have access to this resource")
+		return
+	}
+
+	file, err := vh.vs.RouteForVideoFile(uint(uintVideoId), fileId)
 
 	repo := c.MustGet(utils.S3_REPO_CTX_KEY).(*repositorioes.S3Repo)
-
 	fileResp, err := repo.GetObjectByFileName(file)
 	if err != nil {
 		log.Printf("Error getting file from S3: %v", err)

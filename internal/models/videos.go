@@ -13,6 +13,7 @@ type Video struct {
 	UserId          uint
 	Name            string
 	DurationMinutes uint
-    Formatted       bool
-    Route   string
+	Formatted       bool
+	Route           string
+	Protected       bool `gorm:"default:false"`
 }
