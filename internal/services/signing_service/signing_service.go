@@ -46,15 +46,16 @@ func (ss *SigningService) SignUrlForVideoFile(vID uint, file, baseUrl string) (s
 		}
 	}
 
-	url += "&signature=" + ss.generateSignature(file, video)
+	signature, expiry := ss.generateSignature(file, video)
+	url += "&signature=" + signature + "&expires_at=" + expiry + "&video_id=" + fmt.Sprintf("%d", video.ID)
 
 	return url, nil
 }
 
-func (ss *SigningService) generateSignature(file string, video *models.Video) string {
+func (ss *SigningService) generateSignature(file string, video *models.Video) (string, string) {
 	s := os.Getenv("URL_SIGNING_KEY")
 	expiresAt := time.Now().Add(5 * time.Minute).Unix()
 	signature := aurelia.Hash(s, fmt.Sprintf("%s:%d:%d", file, video.ID, expiresAt))
 
-	return signature
+	return signature, fmt.Sprintf("%d", expiresAt)
 }
