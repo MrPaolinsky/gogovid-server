@@ -21,8 +21,10 @@
 
         <script>
             const url =
-                "http://localhost:8080/video/gogovid-1741021062961.mpd?video_id=2"; // Change to your actual MPD URL
-            const routeParam = new URL(url).searchParams.get("video_id");
+                "http://localhost:8080/video/gogovid-1741021062961.mpd?route=gogovid-upload-1741021091188t.mp4&signature=AURELIA_dfb55fdd84cb86359949074b60aa92548dadacb7.05833346604f22d95d1b4898defdda30c51d0cf1.UC_a50280646b1c642c4fe9b74a3397134a0ec3577cf1486edb98af1dd0895abc3d&expires_at=1741877072&video_id=2"; // Change to your actual MPD URL
+            const vId = new URL(url).searchParams.get("video_id");
+            const signature = new URL(url).searchParams.get("signature");
+            const expiry = new URL(url).searchParams.get("expires_at");
             const video = document.getElementById("videoPlayer");
             const durationDisplay = document.getElementById("duration");
 
@@ -35,7 +37,11 @@
                 request.url +=
                     (request.url.includes("?") ? "&" : "?") +
                     "video_id=" +
-                    encodeURIComponent(routeParam);
+                    encodeURIComponent(vId) +
+                    "&expires_at=" +
+                    encodeURIComponent(expiry) +
+                    "&signature=" +
+                    encodeURIComponent(signature);
                 return Promise.resolve(request);
             };
 

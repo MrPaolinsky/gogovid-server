@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kodefluence/aurelia"
@@ -38,12 +39,15 @@ func (vs *VideoService) ValidateStream(videoId uint, signature, file, expiresAt 
 		if err != nil {
 			return err
 		}
+
 		if !aurelia.Authenticate(
 			os.Getenv("URL_SIGNING_KEY"),
 			fmt.Sprintf("%s:%d:%d", file, video.ID, expiresAtUnix),
 			signature,
 		) {
 			return fmt.Errorf("Invalid signature")
+		} else if time.Now().Unix() > int64(expiresAtUnix) {
+			return fmt.Errorf("Expired signature")
 		}
 	}
 
